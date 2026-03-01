@@ -1,156 +1,68 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
+import streamlit as st
 import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 import numpy as np
+from PIL import Image
 import matplotlib.pyplot as plt
+import os
 
+# ─── Page Config ────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Cat vs Dog Classifier", page_icon="🐾")
+st.title("🐾 Cat vs Dog Image Classifier")
+st.write("Upload an image and the model will predict whether it's a **Cat** or a **Dog**.")
 
-# In[2]:
+# ─── Load Model ─────────────────────────────────────────────────────────────
+MODEL_PATH = "cat_dog_model.h5"  # Make sure this file is in your GitHub repo
 
+@st.cache_resource
+def load_trained_model():
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"❌ Model file '{MODEL_PATH}' not found. Please upload it to your GitHub repo.")
+        st.stop()
+    model = load_model(MODEL_PATH)
+    return model
 
-# Training data augmentation
-train_datagen = ImageDataGenerator(
-    rescale=1./255,
-    shear_range=0.2,
-    zoom_range=0.2,
-    horizontal_flip=True
-)
+model = load_trained_model()
+st.success("✅ Model loaded successfully!")
 
-# Test data (no augmentation)
-test_datagen = ImageDataGenerator(rescale=1./255)
+# ─── Image Upload ────────────────────────────────────────────────────────────
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-train_generator = train_datagen.flow_from_directory(
-    r'C:\Users\Kaustubh Gupta\Downloads\test\PetImages',
-    target_size=(64,64),
-    batch_size=32,
-    class_mode='binary'
-)
+if uploaded_file is not None:
+    # Display the uploaded image
+    img_display = Image.open(uploaded_file)
+    st.image(img_display, caption="Uploaded Image", use_column_width=True)
 
-test_generator = test_datagen.flow_from_directory(
-    r'C:\Users\Kaustubh Gupta\Downloads\Train\animals',
-    target_size=(64,64),
-    batch_size=32,
-    class_mode='binary'
-)
+    # Preprocess the image
+    img = img_display.resize((64, 64))
+    img = img.convert("RGB")           # ensure 3 channels
+    img_array = image.img_to_array(img)
+    img_array = img_array / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
 
+    # Predict
+    with st.spinner("Predicting..."):
+        result = model.predict(img_array)
+        confidence = float(result[0][0])
 
-# In[3]:
+    # Show result
+    st.subheader("🔍 Prediction Result")
+    if confidence > 0.5:
+        label = "🐶 Dog"
+        prob = confidence
+    else:
+        label = "🐱 Cat"
+        prob = 1 - confidence
 
+    st.markdown(f"### {label}")
+    st.progress(prob)
+    st.write(f"Confidence: **{prob * 100:.2f}%**")
 
-cnn = Sequential()
-
-# Convolution Block 1
-cnn.add(Conv2D(32,(3,3),activation='relu',input_shape=(64,64,3)))
-cnn.add(MaxPooling2D(pool_size=(2,2)))
-
-# Block 2
-cnn.add(Conv2D(64,(3,3),activation='relu'))
-cnn.add(MaxPooling2D(pool_size=(2,2)))
-
-# Block 3
-cnn.add(Conv2D(128,(3,3),activation='relu'))
-cnn.add(MaxPooling2D(pool_size=(2,2)))
-
-# Flatten
-cnn.add(Flatten())
-
-# Fully connected layer
-cnn.add(Dense(128, activation='relu'))
-
-# Output layer
-cnn.add(Dense(1, activation='sigmoid'))
-
-cnn.summary()
-
-
-# In[4]:
-
-
-cnn.compile(
-    optimizer='adam',
-    loss='binary_crossentropy',
-    metrics=['accuracy']
-)
-
-
-# In[5]:
-
-
-history = cnn.fit(
-    train_generator,
-    steps_per_epoch=10,
-    epochs=10,
-    validation_data=test_generator,
-    validation_steps=50
-)
-
-
-# In[10]:
-
-
-plt.plot(history.history['accuracy'], label='Train Accuracy')
-plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
-plt.legend()
-plt.title("Accuracy Graph")
-plt.show()
-
-plt.plot(history.history['loss'], label='Train Loss')
-plt.plot(history.history['val_loss'], label='Validation Loss')
-plt.legend()
-plt.title("Loss Graph")
-plt.show()
-
-
-# In[14]:
-
-
-img_path = r"C:\Users\Kaustubh Gupta\Downloads\test\PetImages\Cat\998.jpg"  
-
-img = image.load_img(img_path, target_size=(64,64))
-img = image.img_to_array(img)
-img = img / 255.0
-img = np.expand_dims(img, axis=0)
-
-result = cnn.predict(img)
-
-print(result)
-
-if result[0][0] > 0.5:
-    print("Dog")
-else:
-    print("Cat")
-
-
-# In[15]:
-
-
-img_path = r"C:\Users\Kaustubh Gupta\Downloads\test\PetImages\Dog\9989.jpg"
-
-img = image.load_img(img_path, target_size=(64,64))
-img = image.img_to_array(img)
-img = img / 255.0
-img = np.expand_dims(img, axis=0)
-
-result = cnn.predict(img)
-
-print(result)
-
-if result[0][0] > 0.5:
-    print("Dog")
-else:
-    print("Cat")
-
-
-# In[ ]:
-
-
-
-
+    # Bar chart
+    fig, ax = plt.subplots()
+    ax.bar(["Cat", "Dog"], [1 - confidence, confidence], color=["#FF6B6B", "#4ECDC4"])
+    ax.set_ylabel("Probability")
+    ax.set_title("Prediction Probabilities")
+    ax.set_ylim(0, 1)
+    st.pyplot(fig)
