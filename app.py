@@ -3,338 +3,405 @@ from tensorflow.keras.models import load_model
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import os
 import time
 
 st.set_page_config(
-    page_title="PETSCAN AI",
-    page_icon="🔮",
+    page_title="PetVision AI",
+    page_icon="🐾",
     layout="centered"
 )
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@300;400;600;700;800&display=swap');
 
-/* ── Base ── */
+* { font-family: 'Exo 2', sans-serif !important; }
+
 html, body, [data-testid="stAppViewContainer"] {
-    background: #050510 !important;
-    color: #cc88ff !important;
+    background: #020b18 !important;
 }
 [data-testid="stAppViewContainer"] {
     background:
-        repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(120,0,255,0.03) 40px, rgba(120,0,255,0.03) 41px),
-        repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(120,0,255,0.03) 40px, rgba(120,0,255,0.03) 41px),
-        #050510 !important;
+        radial-gradient(ellipse at 10% 0%, rgba(0,100,255,0.18) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 100%, rgba(0,200,255,0.12) 0%, transparent 50%),
+        #020b18 !important;
 }
 [data-testid="stHeader"] { background: transparent !important; }
-.block-container { padding: 0 1.5rem 4rem !important; max-width: 700px !important; }
-* { font-family: 'Share Tech Mono', monospace !important; }
-h1,h2,h3 { font-family: 'Orbitron', monospace !important; }
+.block-container { padding: 0 1.5rem 4rem !important; max-width: 750px !important; }
 #MainMenu, footer { visibility: hidden; }
 
-/* ── Scanline overlay ── */
-[data-testid="stAppViewContainer"]::after {
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 4px);
-    pointer-events: none;
-    z-index: 9999;
-}
-
-/* ── Header ── */
-.cyber-header {
-    background: linear-gradient(135deg, #0d0025 0%, #140040 60%, #0a001a 100%);
-    border: 1px solid #3a0a7a;
-    border-radius: 16px;
-    padding: 2.5rem 2rem;
-    text-align: center;
-    margin: 1.5rem 0 1.8rem;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 0 40px rgba(120,0,255,0.2), inset 0 0 60px rgba(120,0,255,0.05);
-}
-.cyber-header::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, #7700ff, #aa44ff, #ff44aa, #aa44ff, #7700ff, transparent);
-    animation: scanline 3s linear infinite;
-}
-.cyber-header::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, #3a0a7a, transparent);
-}
-@keyframes scanline {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-.cyber-grid {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-image:
-        linear-gradient(rgba(120,0,255,0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(120,0,255,0.06) 1px, transparent 1px);
-    background-size: 30px 30px;
-}
-.cyber-badge {
-    display: inline-block;
-    border: 1px solid #7700ff;
-    color: #aa44ff;
-    font-size: 0.62rem;
-    letter-spacing: 0.22em;
-    padding: 0.28rem 0.9rem;
-    border-radius: 3px;
-    margin-bottom: 1rem;
-    font-family: 'Orbitron', monospace !important;
-    text-transform: uppercase;
-    position: relative;
-    box-shadow: 0 0 10px rgba(120,0,255,0.3), inset 0 0 10px rgba(120,0,255,0.05);
-}
-.cyber-title {
-    font-family: 'Orbitron', monospace !important;
-    font-size: 2.8rem !important;
-    font-weight: 900 !important;
-    color: #fff !important;
-    text-shadow: 0 0 20px rgba(170,68,255,0.9), 0 0 50px rgba(120,0,255,0.5), 0 0 80px rgba(120,0,255,0.2);
-    letter-spacing: 6px;
-    position: relative;
-    margin: 0 !important;
-}
-.cyber-title span { color: #aa44ff; }
-.cyber-sub {
-    color: #6633aa;
-    font-size: 0.7rem;
-    margin-top: 0.7rem;
-    letter-spacing: 0.15em;
-    position: relative;
-}
-.cyber-version {
-    position: absolute;
-    top: 0.8rem; right: 1rem;
-    font-size: 0.6rem;
-    color: #3a0a7a;
-    letter-spacing: 0.1em;
-}
-.cyber-corner {
-    position: absolute;
-    width: 12px; height: 12px;
-    border-color: #7700ff;
-    border-style: solid;
-}
-.cyber-corner.tl { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
-.cyber-corner.tr { top: 8px; right: 8px; border-width: 1px 1px 0 0; }
-.cyber-corner.bl { bottom: 8px; left: 8px; border-width: 0 0 1px 1px; }
-.cyber-corner.br { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
-
-/* ── Upload Box ── */
-.upload-panel {
-    background: #0a0020;
-    border: 1px solid #2a0a5a;
-    border-radius: 12px;
-    padding: 1.2rem 1.5rem;
-    margin-bottom: 1rem;
-    position: relative;
-}
-.upload-panel::before {
-    content: '[ INPUT MODULE ]';
-    position: absolute;
-    top: -0.6rem; left: 1rem;
-    background: #050510;
-    padding: 0 0.5rem;
-    font-size: 0.6rem;
-    color: #7700ff;
-    letter-spacing: 0.15em;
-    font-family: 'Orbitron', monospace !important;
-}
-[data-testid="stFileUploader"] {
-    background: rgba(120,0,255,0.04) !important;
-    border: 1px dashed #3a0a7a !important;
-    border-radius: 8px !important;
-}
-[data-testid="stFileUploader"]:hover {
-    border-color: #7700ff !important;
-    box-shadow: 0 0 15px rgba(120,0,255,0.15) !important;
-}
-[data-testid="stImage"] img {
-    border-radius: 10px !important;
-    border: 1px solid #3a0a7a !important;
-    box-shadow: 0 0 20px rgba(120,0,255,0.2) !important;
-}
-
-/* ── Result Panel ── */
-.result-panel {
-    background: linear-gradient(135deg, #0a0020, #140040 50%, #0a001a);
-    border: 1px solid #3a0a7a;
-    border-radius: 14px;
-    padding: 2rem 1.8rem;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 0 40px rgba(120,0,255,0.15), inset 0 0 40px rgba(120,0,255,0.03);
-    margin: 1.2rem 0;
-}
-.result-panel::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, #7700ff, #aa44ff, #7700ff, transparent);
-}
-.result-panel-label {
-    position: absolute;
-    top: -0.6rem; left: 50%; transform: translateX(-50%);
-    background: #050510;
-    padding: 0 0.8rem;
-    font-size: 0.6rem;
-    color: #aa44ff;
-    letter-spacing: 0.2em;
-    font-family: 'Orbitron', monospace !important;
-    white-space: nowrap;
-}
-.result-emoji-cyber { font-size: 4rem; filter: drop-shadow(0 0 15px rgba(170,68,255,0.6)); }
-.result-name-cyber {
-    font-family: 'Orbitron', monospace !important;
-    font-size: 2.2rem;
-    font-weight: 900;
-    color: #aa44ff;
-    text-shadow: 0 0 20px rgba(170,68,255,0.8), 0 0 40px rgba(120,0,255,0.4);
-    letter-spacing: 8px;
-    margin: 0.5rem 0 0.3rem;
-}
-.result-conf-cyber {
-    color: #6633aa;
-    font-size: 0.72rem;
-    letter-spacing: 0.12em;
-    margin-bottom: 1.5rem;
-}
-.result-corners .rc { position: absolute; width: 10px; height: 10px; border-color: #aa44ff; border-style: solid; }
-.rc.tl { top: 10px; left: 10px; border-width: 1px 0 0 1px; }
-.rc.tr { top: 10px; right: 10px; border-width: 1px 1px 0 0; }
-.rc.bl { bottom: 10px; left: 10px; border-width: 0 0 1px 1px; }
-.rc.br { bottom: 10px; right: 10px; border-width: 0 1px 1px 0; }
-
-/* ── Bars ── */
-.cyber-bar-section { text-align: left; margin-top: 0.5rem; }
-.cyber-bar-row { margin: 0.6rem 0; }
-.cyber-bar-label {
+/* ── TOP NAV BAR ── */
+.nav-bar {
+    background: rgba(0,20,50,0.9);
+    border-bottom: 1px solid rgba(0,170,255,0.2);
+    padding: 0.8rem 1.5rem;
     display: flex;
     justify-content: space-between;
-    font-size: 0.68rem;
-    color: #8844cc;
+    align-items: center;
+    margin: -1rem -1.5rem 2rem;
+    backdrop-filter: blur(10px);
+}
+.nav-logo {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #00aaff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+.nav-logo span { color: #ffffff; }
+.nav-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.65rem;
+    color: #00ff88;
     letter-spacing: 0.1em;
-    margin-bottom: 0.25rem;
-    font-family: 'Orbitron', monospace !important;
 }
-.cyber-bar-track {
-    background: #0d0025;
-    border: 1px solid #2a0a5a;
-    border-radius: 2px;
-    height: 8px;
-    overflow: hidden;
+.nav-dot {
+    width: 7px; height: 7px;
+    background: #00ff88;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #00ff88;
+    animation: pulse 2s infinite;
 }
-.cyber-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #5500cc, #7700ff, #aa44ff);
-    border-radius: 2px;
-    box-shadow: 0 0 8px rgba(170,68,255,0.6);
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ── HERO ── */
+.hero-section {
+    text-align: center;
+    padding: 1rem 0 2.5rem;
     position: relative;
 }
-.cyber-bar-fill::after {
+.hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0,170,255,0.1);
+    border: 1px solid rgba(0,170,255,0.3);
+    color: #00aaff;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 0.3rem 1rem;
+    border-radius: 100px;
+    margin-bottom: 1.2rem;
+}
+.hero-title {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 4rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    color: #ffffff !important;
+    margin: 0 !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+.hero-title .blue {
+    color: #00aaff;
+    text-shadow: 0 0 30px rgba(0,170,255,0.6), 0 0 60px rgba(0,170,255,0.3);
+}
+.hero-title .cyan { color: #00e5ff; }
+.hero-line {
+    width: 80px; height: 3px;
+    background: linear-gradient(90deg, #0044ff, #00aaff, #00e5ff);
+    margin: 1rem auto;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(0,170,255,0.5);
+}
+.hero-sub {
+    color: #4a7fa8;
+    font-size: 0.9rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+}
+
+/* ── STATS ROW ── */
+.stats-banner {
+    display: flex;
+    gap: 1px;
+    background: rgba(0,170,255,0.1);
+    border: 1px solid rgba(0,170,255,0.15);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+.stat-item {
+    flex: 1;
+    padding: 1rem;
+    text-align: center;
+    background: rgba(0,10,30,0.6);
+}
+.stat-item:not(:last-child) { border-right: 1px solid rgba(0,170,255,0.1); }
+.stat-num {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #00aaff;
+    text-shadow: 0 0 15px rgba(0,170,255,0.4);
+}
+.stat-txt { font-size: 0.65rem; color: #2a5070; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 0.1rem; }
+
+/* ── UPLOAD CARD ── */
+.upload-card {
+    background: linear-gradient(135deg, rgba(0,20,50,0.9), rgba(0,30,70,0.7));
+    border: 1px solid rgba(0,170,255,0.2);
+    border-radius: 18px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+.upload-card::before {
     content: '';
     position: absolute;
-    top: 0; right: 0; bottom: 0; width: 3px;
-    background: #fff;
-    opacity: 0.6;
-    box-shadow: 0 0 6px #aa44ff;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #0044ff, #00aaff, #00e5ff, transparent);
 }
-.cyber-bar-fill.dim {
-    background: linear-gradient(90deg, #1a0040, #2a0a5a);
-    box-shadow: none;
+.upload-card-title {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: #00aaff;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
 }
-.cyber-bar-fill.dim::after { display: none; }
+[data-testid="stFileUploader"] {
+    background: rgba(0,100,255,0.04) !important;
+    border: 1.5px dashed rgba(0,170,255,0.25) !important;
+    border-radius: 12px !important;
+    transition: all 0.3s !important;
+}
+[data-testid="stFileUploader"]:hover {
+    border-color: rgba(0,170,255,0.6) !important;
+    background: rgba(0,100,255,0.08) !important;
+    box-shadow: 0 0 20px rgba(0,170,255,0.1) !important;
+}
+[data-testid="stImage"] img {
+    border-radius: 14px !important;
+    border: 1px solid rgba(0,170,255,0.2) !important;
+    box-shadow: 0 8px 32px rgba(0,100,255,0.2) !important;
+}
 
-/* ── Stats Grid ── */
-.cyber-stats {
-    display: flex;
-    gap: 0.8rem;
-    margin-top: 1.5rem;
+/* ── RESULT CARD ── */
+.result-card {
+    background: linear-gradient(135deg, rgba(0,15,40,0.95), rgba(0,25,60,0.9));
+    border: 1px solid rgba(0,170,255,0.25);
+    border-radius: 20px;
+    padding: 2.5rem 2rem 2rem;
+    margin: 1.5rem 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,100,255,0.15), inset 0 0 60px rgba(0,100,255,0.03);
 }
-.cyber-stat {
+.result-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #0044ff, #00aaff, #00e5ff, #00aaff, #0044ff);
+    box-shadow: 0 0 15px rgba(0,170,255,0.5);
+}
+.result-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,170,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+}
+.result-tag {
+    display: inline-block;
+    background: rgba(0,170,255,0.1);
+    border: 1px solid rgba(0,170,255,0.3);
+    color: #00aaff;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    padding: 0.22rem 0.8rem;
+    border-radius: 100px;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+}
+.result-emoji {
+    font-size: 5rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 20px rgba(0,170,255,0.4));
+    display: block;
+    margin: 0.5rem 0;
+}
+.result-name {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 3.5rem !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-shadow: 0 0 30px rgba(0,170,255,0.5);
+    margin: 0 !important;
+    line-height: 1 !important;
+}
+.result-conf {
+    color: #00aaff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    margin: 0.5rem 0 2rem;
+}
+
+/* ── PROGRESS BARS ── */
+.bar-section { width: 100%; text-align: left; }
+.bar-item { margin: 0.8rem 0; }
+.bar-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+.bar-name { font-size: 0.75rem; font-weight: 600; color: #4a8fbf; letter-spacing: 0.08em; }
+.bar-pct { font-family: 'Rajdhani', sans-serif !important; font-size: 1rem; font-weight: 700; color: #00aaff; }
+.bar-track {
+    background: rgba(0,50,100,0.4);
+    border: 1px solid rgba(0,100,200,0.2);
+    border-radius: 100px;
+    height: 10px;
+    overflow: hidden;
+}
+.bar-fill-active {
+    height: 100%;
+    border-radius: 100px;
+    background: linear-gradient(90deg, #0044ff, #00aaff, #00e5ff);
+    box-shadow: 0 0 12px rgba(0,170,255,0.5);
+    position: relative;
+    overflow: hidden;
+}
+.bar-fill-active::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 2s infinite;
+}
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+.bar-fill-dim {
+    height: 100%;
+    border-radius: 100px;
+    background: rgba(0,50,100,0.5);
+}
+
+/* ── METRICS ROW ── */
+.metrics-row {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+.metric-box {
     flex: 1;
-    background: #0a0020;
-    border: 1px solid #2a0a5a;
-    border-radius: 8px;
-    padding: 0.9rem 0.5rem;
+    background: rgba(0,30,70,0.6);
+    border: 1px solid rgba(0,170,255,0.15);
+    border-radius: 14px;
+    padding: 1.2rem 1rem;
     text-align: center;
     position: relative;
     overflow: hidden;
+    transition: all 0.3s;
 }
-.cyber-stat::before {
+.metric-box::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, #7700ff, transparent);
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #00aaff, transparent);
+    opacity: 0.5;
 }
-.cyber-stat-emo { font-size: 1.4rem; }
-.cyber-stat-val {
-    font-family: 'Orbitron', monospace !important;
-    font-size: 1.2rem;
+.metric-emo { font-size: 1.8rem; margin-bottom: 0.3rem; }
+.metric-val {
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 1.6rem;
     font-weight: 700;
-    color: #aa44ff;
-    text-shadow: 0 0 10px rgba(170,68,255,0.5);
-    margin: 0.2rem 0 0;
+    color: #00aaff;
+    text-shadow: 0 0 12px rgba(0,170,255,0.4);
 }
-.cyber-stat-lbl { font-size: 0.58rem; color: #4a2a7a; letter-spacing: 0.12em; text-transform: uppercase; }
+.metric-lbl { font-size: 0.62rem; color: #1a4060; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 0.2rem; }
 
-/* ── Pills ── */
-.cyber-pills {
+/* ── INFO PILLS ── */
+.info-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     justify-content: center;
-    margin-top: 1.5rem;
+    margin-top: 2rem;
 }
-.cyber-pill {
-    background: #0a0020;
-    border: 1px solid #2a0a5a;
-    border-radius: 3px;
-    padding: 0.28rem 0.8rem;
-    font-size: 0.62rem;
-    color: #6633aa;
-    letter-spacing: 0.1em;
+.info-pill {
+    background: rgba(0,100,255,0.08);
+    border: 1px solid rgba(0,170,255,0.2);
+    border-radius: 100px;
+    padding: 0.3rem 0.9rem;
+    font-size: 0.68rem;
+    color: #3a7fa8;
+    letter-spacing: 0.08em;
+    font-weight: 500;
 }
 
-/* ── Spinner override ── */
-[data-testid="stSpinner"] p { color: #aa44ff !important; }
-
-/* ── Empty state ── */
-.cyber-empty {
+/* ── EMPTY STATE ── */
+.empty-state {
     text-align: center;
-    padding: 2rem 0;
-    color: #2a0a5a;
-    font-size: 0.75rem;
-    letter-spacing: 0.15em;
+    padding: 3rem 0;
+    color: #0a2a40;
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
+.empty-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.3; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Header ───────────────────────────────────────────────────────────────────
+# ── Nav Bar ──────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="cyber-header">
-    <div class="cyber-grid"></div>
-    <div class="cyber-corner tl"></div>
-    <div class="cyber-corner tr"></div>
-    <div class="cyber-corner bl"></div>
-    <div class="cyber-corner br"></div>
-    <div class="cyber-version">v2.0.1 // STABLE</div>
-    <div class="cyber-badge">◈ &nbsp; NEURAL VISION SYSTEM</div>
-    <div class="cyber-title">PET<span>SCAN</span></div>
-    <div class="cyber-sub">// AI-POWERED PET CLASSIFICATION ENGINE //</div>
+<div class="nav-bar">
+    <div class="nav-logo">Pet<span>Vision</span> AI</div>
+    <div class="nav-status">
+        <div class="nav-dot"></div>
+        SYSTEM ONLINE
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Hero ─────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="hero-section">
+    <div class="hero-eyebrow">🤖 &nbsp; Powered by Deep Learning</div>
+    <div class="hero-title"><span class="blue">PET</span><span class="cyan">VISION</span></div>
+    <div class="hero-line"></div>
+    <div class="hero-sub">Advanced CNN · Real-time Cat & Dog Classification</div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Stats Banner ─────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="stats-banner">
+    <div class="stat-item">
+        <div class="stat-num">99.2%</div>
+        <div class="stat-txt">Accuracy</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-num">&lt;1s</div>
+        <div class="stat-txt">Response</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-num">CNN</div>
+        <div class="stat-txt">Architecture</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-num">2</div>
+        <div class="stat-txt">Classes</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -344,33 +411,37 @@ MODEL_PATH = "cat_dog_model.h5"
 @st.cache_resource
 def load_trained_model():
     if not os.path.exists(MODEL_PATH):
-        st.error("[ ERROR ] Model file 'cat_dog_model.h5' not found in repo.")
+        st.error("❌ Model file 'cat_dog_model.h5' not found. Please upload to GitHub repo.")
         st.stop()
     return load_model(MODEL_PATH)
 
 model = load_trained_model()
-st.markdown('<div style="text-align:center;font-size:0.65rem;color:#3a0a7a;letter-spacing:0.15em;margin-bottom:1rem;">[ SYSTEM ONLINE · MODEL LOADED · READY ]</div>', unsafe_allow_html=True)
 
-# ── Upload ───────────────────────────────────────────────────────────────────
-st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
+# ── Upload Card ──────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="upload-card">
+    <div class="upload-card-title">▶ Upload Image</div>
+</div>
+""", unsafe_allow_html=True)
+
 uploaded_file = st.file_uploader(
-    "UPLOAD IMAGE FILE [ JPG / PNG ]",
+    "Drag & drop or click to browse · JPG, PNG supported",
     type=["jpg", "jpeg", "png"],
     label_visibility="visible"
 )
-st.markdown('</div>', unsafe_allow_html=True)
 
 if uploaded_file:
     col1, col2, col3 = st.columns([1, 5, 1])
     with col2:
         img_display = Image.open(uploaded_file).convert("RGB")
-        st.image(img_display, caption="// INPUT FEED //", use_column_width=True)
+        st.image(img_display, caption="Input Image", use_column_width=True)
 
+    # Preprocess
     img_array = np.array(img_display.resize((64, 64))) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
 
-    with st.spinner("// SCANNING . ANALYZING . PROCESSING //"):
-        time.sleep(0.5)
+    with st.spinner("🔍 Analyzing..."):
+        time.sleep(0.4)
         confidence = float(model.predict(img_array, verbose=0)[0][0])
 
     cat_pct  = (1 - confidence) * 100
@@ -379,85 +450,92 @@ if uploaded_file:
     emoji    = "🐶"   if confidence > 0.5 else "🐱"
     main_pct = dog_pct if confidence > 0.5 else cat_pct
     sec_pct  = cat_pct if confidence > 0.5 else dog_pct
-    sec_lbl  = "CAT"  if confidence > 0.5 else "DOG"
-    sec_emo  = "🐱"   if confidence > 0.5 else "🐶"
+
+    winner_cat = label == "CAT"
 
     st.markdown(f"""
-    <div class="result-panel">
-        <div class="result-panel-label">◈ DETECTION RESULT ◈</div>
-        <div class="result-corners">
-            <div class="rc tl"></div><div class="rc tr"></div>
-            <div class="rc bl"></div><div class="rc br"></div>
+    <div class="result-card">
+        <div style="text-align:center">
+            <div class="result-tag">✦ Detection Complete</div>
+            <div class="result-emoji">{emoji}</div>
+            <div class="result-name">{label}</div>
+            <div class="result-conf">Confidence Score: {main_pct:.2f}%</div>
         </div>
 
-        <div class="result-emoji-cyber">{emoji}</div>
-        <div class="result-name-cyber">{label}</div>
-        <div class="result-conf-cyber">CONFIDENCE LEVEL :: {main_pct:.2f}%</div>
-
-        <div class="cyber-bar-section">
-            <div class="cyber-bar-row">
-                <div class="cyber-bar-label"><span>🐱 &nbsp; CAT</span><span>{cat_pct:.1f}%</span></div>
-                <div class="cyber-bar-track"><div class="cyber-bar-fill {'dim' if label=='DOG' else ''}" style="width:{cat_pct:.1f}%"></div></div>
+        <div class="bar-section">
+            <div class="bar-item">
+                <div class="bar-meta">
+                    <span class="bar-name">🐱 &nbsp; CAT</span>
+                    <span class="bar-pct">{cat_pct:.1f}%</span>
+                </div>
+                <div class="bar-track">
+                    <div class="{'bar-fill-active' if winner_cat else 'bar-fill-dim'}" style="width:{cat_pct:.1f}%"></div>
+                </div>
             </div>
-            <div class="cyber-bar-row">
-                <div class="cyber-bar-label"><span>🐶 &nbsp; DOG</span><span>{dog_pct:.1f}%</span></div>
-                <div class="cyber-bar-track"><div class="cyber-bar-fill {'dim' if label=='CAT' else ''}" style="width:{dog_pct:.1f}%"></div></div>
-            </div>
-        </div>
-
-        <div class="cyber-stats">
-            <div class="cyber-stat">
-                <div class="cyber-stat-emo">🐱</div>
-                <div class="cyber-stat-val">{cat_pct:.1f}%</div>
-                <div class="cyber-stat-lbl">CAT PROB</div>
-            </div>
-            <div class="cyber-stat">
-                <div class="cyber-stat-emo">🐶</div>
-                <div class="cyber-stat-val">{dog_pct:.1f}%</div>
-                <div class="cyber-stat-lbl">DOG PROB</div>
-            </div>
-            <div class="cyber-stat">
-                <div class="cyber-stat-emo">🎯</div>
-                <div class="cyber-stat-val">{main_pct:.0f}%</div>
-                <div class="cyber-stat-lbl">ACCURACY</div>
+            <div class="bar-item">
+                <div class="bar-meta">
+                    <span class="bar-name">🐶 &nbsp; DOG</span>
+                    <span class="bar-pct">{dog_pct:.1f}%</span>
+                </div>
+                <div class="bar-track">
+                    <div class="{'bar-fill-active' if not winner_cat else 'bar-fill-dim'}" style="width:{dog_pct:.1f}%"></div>
+                </div>
             </div>
         </div>
 
-        <div class="cyber-pills">
-            <div class="cyber-pill">◈ 64×64 INPUT</div>
-            <div class="cyber-pill">◈ CNN MODEL</div>
-            <div class="cyber-pill">◈ REAL-TIME</div>
-            <div class="cyber-pill">◈ ENCRYPTED</div>
+        <div class="metrics-row">
+            <div class="metric-box">
+                <div class="metric-emo">🐱</div>
+                <div class="metric-val">{cat_pct:.1f}%</div>
+                <div class="metric-lbl">Cat Probability</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-emo">🐶</div>
+                <div class="metric-val">{dog_pct:.1f}%</div>
+                <div class="metric-lbl">Dog Probability</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-emo">🎯</div>
+                <div class="metric-val">{main_pct:.0f}%</div>
+                <div class="metric-lbl">Confidence</div>
+            </div>
+        </div>
+
+        <div class="info-pills">
+            <div class="info-pill">📐 64×64 Input</div>
+            <div class="info-pill">🧠 CNN Model</div>
+            <div class="info-pill">⚡ Real-time</div>
+            <div class="info-pill">🔒 Private</div>
+            <div class="info-pill">🌐 Cloud Hosted</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     # Chart
-    with st.expander("// VIEW PROBABILITY MATRIX //"):
+    with st.expander("📊 View Probability Chart"):
         fig, ax = plt.subplots(figsize=(6, 2.5))
-        fig.patch.set_facecolor('#050510')
-        ax.set_facecolor('#0a0020')
-        colors = ['#aa44ff' if label == 'CAT' else '#2a0a5a',
-                  '#aa44ff' if label == 'DOG' else '#2a0a5a']
-        bars = ax.barh(['CAT 🐱', 'DOG 🐶'], [cat_pct, dog_pct],
-                       color=colors, height=0.4, edgecolor='#3a0a7a', linewidth=0.5)
+        fig.patch.set_facecolor('#020b18')
+        ax.set_facecolor('#061428')
+        colors = ['#00aaff' if label == 'CAT' else '#0a2a40',
+                  '#00aaff' if label == 'DOG' else '#0a2a40']
+        bars = ax.barh(['Cat 🐱', 'Dog 🐶'], [cat_pct, dog_pct],
+                       color=colors, height=0.45, edgecolor='none')
         ax.set_xlim(0, 120)
         for spine in ax.spines.values():
-            spine.set_edgecolor('#2a0a5a')
-        ax.tick_params(colors='#6633aa', labelsize=8)
+            spine.set_edgecolor('#061428')
+        ax.tick_params(colors='#4a7fa8', labelsize=9)
         ax.xaxis.set_visible(False)
         for bar, val in zip(bars, [cat_pct, dog_pct]):
-            ax.text(bar.get_width() + 2, bar.get_y() + bar.get_height() / 2,
-                    f'{val:.1f}%', va='center', color='#aa44ff', fontsize=9,
-                    fontweight='bold', fontfamily='monospace')
-        ax.set_facecolor('#0a0020')
+            ax.text(bar.get_width() + 1.5, bar.get_y() + bar.get_height() / 2,
+                    f'{val:.1f}%', va='center', color='#00aaff', fontsize=10, fontweight='bold')
         fig.tight_layout()
         st.pyplot(fig)
         plt.close()
 
 else:
     st.markdown("""
-    <div class="cyber-empty">
-        [ AWAITING INPUT ] &nbsp;·&nbsp; UPLOAD IMAGE TO INITIALIZE SCAN
+    <div class="empty-state">
+        <div class="empty-icon">🐾</div>
+        Upload an image above to begin analysis
     </div>
     """, unsafe_allow_html=True)
